@@ -21,7 +21,6 @@ const App = struct {
     gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined,
     allocator: std.mem.Allocator = undefined,
     app_window_table: AppWindowTable = undefined,
-    app_quit_event: sdl.SDL_Event = .{ .type = sdl.SDL_EVENT_QUIT },
 
     fn from_ptr(ptr: ?*anyopaque) ?*@This() {
         return @alignCast(@ptrCast(ptr));
@@ -70,7 +69,8 @@ const App = struct {
             aw.init() catch {
                 self.removeAppWindow(aw);
                 if (self.app_window_table.count() == 0) {
-                    _ = sdl.SDL_PushEvent(&self.app_quit_event);
+                    var quit_event = sdl.SDL_Event{ .type = sdl.SDL_EVENT_QUIT };
+                    _ = sdl.SDL_PushEvent(&quit_event);
                 }
             };
         }

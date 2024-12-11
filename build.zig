@@ -1,0 +1,58 @@
+const std = @import("std");
+
+pub fn build(b: *std.Build) !void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "learn-zig-sdl3",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const sdl3_build_path = blk: {
+        if (optimize == .Debug) {
+            // cmake -B build/clang_debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DSDL_ASAN=ON
+            break :blk "vendor/SDL/build/clang_debug";
+        } else {
+            // cmake -B build/clang_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+            break :blk "vendor/SDL/build/clang_release";
+        }
+    };
+
+    exe.subsystem = .Console;
+    exe.addIncludePath(b.path("vendor/SDL/include"));
+    exe.addLibraryPath(b.path(sdl3_build_path));
+    exe.linkSystemLibrary("SDL3");
+    exe.linkLibC();
+
+    b.installArtifact(exe);
+    switch (target.result.os.tag) {
+        .windows => {
+            b.installBinFile(try std.fmt.allocPrint(b.allocator, "{s}/SDL3.dll", .{sdl3_build_path}), "SDL3.dll");
+        },
+        else => {},
+    }
+
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Run the app");
+    run_step.dependOn(&run_cmd.step);
+
+    const exe_unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_exe_unit_tests.step);
+}

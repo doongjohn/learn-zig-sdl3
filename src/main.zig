@@ -15,6 +15,69 @@ fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: a
     std.debug.print(fmt, args);
 }
 
+const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
+
+const App = struct {
+    gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined,
+    allocator: std.mem.Allocator = undefined,
+    app_window_table: AppWindowTable = undefined,
+    app_quit_event: sdl.SDL_Event = .{ .type = sdl.SDL_EVENT_QUIT },
+
+    fn from_ptr(ptr: ?*anyopaque) ?*@This() {
+        return @alignCast(@ptrCast(ptr));
+    }
+
+    fn init(self: *@This()) !void {
+        self.gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        self.allocator = self.gpa.allocator();
+        self.app_window_table = AppWindowTable.init(self.allocator);
+
+        if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
+            printError(@src(), "SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
+            return error.AppInitFailure;
+        }
+
+        var window: ?*sdl.SDL_Window = null;
+        var renderer: ?*sdl.SDL_Renderer = null;
+        if (!sdl.SDL_CreateWindowAndRenderer("SDL3 with Zig", 600, 300, 0, &window, &renderer)) {
+            printError(@src(), "SDL_CreateWindowAndRenderer failed: {s}\n", .{sdl.SDL_GetError()});
+            return error.AppInitFailure;
+        }
+        try self.addAppWindow(window, renderer);
+    }
+
+    fn deinit(self: *@This()) void {
+        self.app_window_table.deinit();
+    }
+
+    fn addAppWindow(self: *@This(), window: ?*sdl.SDL_Window, renderer: ?*sdl.SDL_Renderer) !void {
+        const window_id = sdl.SDL_GetWindowID(window);
+        if (self.app_window_table.contains(window_id)) {
+            return;
+        }
+
+        try self.app_window_table.put(window_id, .{
+            .window_id = window_id,
+            .window = window,
+            .renderer = renderer,
+        });
+
+        if (self.app_window_table.getPtr(window_id)) |aw| {
+            aw.init() catch {
+                self.removeAppWindow(aw);
+                if (self.app_window_table.count() == 0) {
+                    _ = sdl.SDL_PushEvent(&self.app_quit_event);
+                }
+            };
+        }
+    }
+
+    fn removeAppWindow(self: *@This(), app_window: *AppWindow) void {
+        app_window.deinit();
+        _ = self.app_window_table.remove(app_window.window_id);
+    }
+};
+
 const AppWindow = struct {
     window_id: sdl.SDL_WindowID,
     window: ?*sdl.SDL_Window = null,
@@ -71,69 +134,6 @@ const AppWindow = struct {
     }
 };
 
-const AppWindowMap = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
-
-const App = struct {
-    gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined,
-    allocator: std.mem.Allocator = undefined,
-    app_window_map: AppWindowMap = undefined,
-    app_quit_event: sdl.SDL_Event = .{ .type = sdl.SDL_EVENT_QUIT },
-
-    fn from_ptr(ptr: ?*anyopaque) ?*@This() {
-        return @alignCast(@ptrCast(ptr));
-    }
-
-    fn init(self: *@This()) !void {
-        self.gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        self.allocator = self.gpa.allocator();
-        self.app_window_map = AppWindowMap.init(self.allocator);
-
-        if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
-            printError(@src(), "SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.AppInitFailure;
-        }
-
-        var window: ?*sdl.SDL_Window = null;
-        var renderer: ?*sdl.SDL_Renderer = null;
-        if (!sdl.SDL_CreateWindowAndRenderer("SDL3 with Zig", 600, 300, 0, &window, &renderer)) {
-            printError(@src(), "SDL_CreateWindowAndRenderer failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.AppInitFailure;
-        }
-        try self.addAppWindow(window, renderer);
-    }
-
-    fn deinit(self: *@This()) void {
-        self.app_window_map.deinit();
-    }
-
-    fn addAppWindow(self: *@This(), window: ?*sdl.SDL_Window, renderer: ?*sdl.SDL_Renderer) !void {
-        const window_id = sdl.SDL_GetWindowID(window);
-        if (self.app_window_map.contains(window_id)) {
-            return;
-        }
-
-        try self.app_window_map.put(window_id, .{
-            .window_id = window_id,
-            .window = window,
-            .renderer = renderer,
-        });
-
-        if (self.app_window_map.getPtr(window_id)) |aw| {
-            aw.init() catch {
-                self.removeAppWindow(aw);
-                if (self.app_window_map.count() == 0) {
-                    _ = sdl.SDL_PushEvent(&self.app_quit_event);
-                }
-            };
-        }
-    }
-
-    fn removeAppWindow(self: *@This(), app_window: *AppWindow) void {
-        app_window.deinit();
-        _ = self.app_window_map.remove(app_window.window_id);
-    }
-};
-
 var app_buffer: [@sizeOf(App)]u8 = undefined;
 var app_fba = std.heap.FixedBufferAllocator.init(&app_buffer);
 
@@ -160,14 +160,14 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
     if (App.from_ptr(appstate)) |app| {
         if (event_ptr) |event| {
             const window_id = event.window.windowID;
+
             switch (event.type) {
                 sdl.SDL_EVENT_QUIT => {
                     return sdl.SDL_APP_SUCCESS;
                 },
                 sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                    if (app.app_window_map.getPtr(window_id)) |app_window| {
-                        app_window.deinit();
-                        _ = app.app_window_map.remove(window_id);
+                    if (app.app_window_table.getPtr(window_id)) |app_window| {
+                        app.removeAppWindow(app_window);
                     }
                 },
                 sdl.SDL_EVENT_KEY_DOWN => {
@@ -184,7 +184,7 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                     }
                 },
                 else => {
-                    if (app.app_window_map.getPtr(window_id)) |app_window| {
+                    if (app.app_window_table.getPtr(window_id)) |app_window| {
                         app_window.processEvent(event);
                     }
                 },
@@ -197,7 +197,7 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
 
 export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
     if (App.from_ptr(appstate)) |app| {
-        var iterator = app.app_window_map.valueIterator();
+        var iterator = app.app_window_table.valueIterator();
         while (iterator.next()) |app_window| {
             app_window.update();
         }

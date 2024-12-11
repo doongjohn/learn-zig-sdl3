@@ -37,10 +37,14 @@ const App = struct {
             return error.AppInitFailure;
         }
 
-        var window: ?*sdl.SDL_Window = null;
-        var renderer: ?*sdl.SDL_Renderer = null;
-        if (!sdl.SDL_CreateWindowAndRenderer("SDL3 with Zig", 600, 300, 0, &window, &renderer)) {
-            printError(@src(), "SDL_CreateWindowAndRenderer failed: {s}\n", .{sdl.SDL_GetError()});
+        const window = sdl.SDL_CreateWindow("SDL3 with Zig", 600, 300, 0);
+        if (window == null) {
+            printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
+            return error.AppInitFailure;
+        }
+        const renderer = sdl.SDL_CreateRenderer(window, "vulkan");
+        if (renderer == null) {
+            printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
             return error.AppInitFailure;
         }
         try self.addAppWindow(window, renderer);
@@ -172,10 +176,14 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                 },
                 sdl.SDL_EVENT_KEY_DOWN => {
                     if (event.key.key == sdl.SDLK_SPACE) {
-                        var window: ?*sdl.SDL_Window = null;
-                        var renderer: ?*sdl.SDL_Renderer = null;
-                        if (!sdl.SDL_CreateWindowAndRenderer("SDL3 with Zig", 600, 300, 0, &window, &renderer)) {
-                            printError(@src(), "SDL_CreateWindowAndRenderer failed: {s}\n", .{sdl.SDL_GetError()});
+                        const window = sdl.SDL_CreateWindow("SDL3 with Zig", 600, 300, 0);
+                        if (window == null) {
+                            printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
+                            return sdl.SDL_APP_FAILURE;
+                        }
+                        const renderer = sdl.SDL_CreateRenderer(window, "vulkan");
+                        if (renderer == null) {
+                            printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
                             return sdl.SDL_APP_FAILURE;
                         }
                         app.addAppWindow(window, renderer) catch {

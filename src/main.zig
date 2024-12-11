@@ -40,6 +40,7 @@ const AppWindow = struct {
         const red: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now));
         const green: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 2 / 3));
         const blue: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 4 / 3));
+
         _ = sdl.SDL_SetRenderDrawColorFloat(self.renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT);
         _ = sdl.SDL_RenderClear(self.renderer);
 
@@ -77,6 +78,10 @@ const App = struct {
     allocator: std.mem.Allocator = undefined,
     app_window_map: AppWindowMap = undefined,
     app_quit_event: sdl.SDL_Event = .{ .type = sdl.SDL_EVENT_QUIT },
+
+    fn from_ptr(ptr: ?*anyopaque) ?*@This() {
+        return @alignCast(@ptrCast(ptr));
+    }
 
     fn init(self: *@This()) !void {
         self.gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -129,17 +134,21 @@ const App = struct {
     }
 };
 
-var app = App{};
+var app_buffer: [@sizeOf(App)]u8 = undefined;
+var app_fba = std.heap.FixedBufferAllocator.init(&app_buffer);
 
 export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8) sdl.SDL_AppResult {
     _ = argc;
     _ = argv;
 
     if (appstate_ptr) |appstate| {
-        appstate.* = &app;
+        var app = app_fba.allocator().create(App) catch {
+            return sdl.SDL_APP_FAILURE;
+        };
         app.init() catch {
             return sdl.SDL_APP_FAILURE;
         };
+        appstate.* = app;
     } else {
         return sdl.SDL_APP_FAILURE;
     }
@@ -148,38 +157,38 @@ export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8
 }
 
 export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SDL_AppResult {
-    _ = appstate;
-
-    if (event_ptr) |event| {
-        const window_id = event.window.windowID;
-        switch (event.type) {
-            sdl.SDL_EVENT_QUIT => {
-                return sdl.SDL_APP_SUCCESS;
-            },
-            sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                if (app.app_window_map.getPtr(window_id)) |app_window| {
-                    app_window.deinit();
-                    _ = app.app_window_map.remove(window_id);
-                }
-            },
-            sdl.SDL_EVENT_KEY_DOWN => {
-                if (event.key.key == sdl.SDLK_SPACE) {
-                    var window: ?*sdl.SDL_Window = null;
-                    var renderer: ?*sdl.SDL_Renderer = null;
-                    if (!sdl.SDL_CreateWindowAndRenderer("SDL3 with Zig", 600, 300, 0, &window, &renderer)) {
-                        printError(@src(), "SDL_CreateWindowAndRenderer failed: {s}\n", .{sdl.SDL_GetError()});
-                        return sdl.SDL_APP_FAILURE;
+    if (App.from_ptr(appstate)) |app| {
+        if (event_ptr) |event| {
+            const window_id = event.window.windowID;
+            switch (event.type) {
+                sdl.SDL_EVENT_QUIT => {
+                    return sdl.SDL_APP_SUCCESS;
+                },
+                sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
+                    if (app.app_window_map.getPtr(window_id)) |app_window| {
+                        app_window.deinit();
+                        _ = app.app_window_map.remove(window_id);
                     }
-                    app.addAppWindow(window, renderer) catch {
-                        return sdl.SDL_APP_FAILURE;
-                    };
-                }
-            },
-            else => {
-                if (app.app_window_map.getPtr(window_id)) |app_window| {
-                    app_window.processEvent(event);
-                }
-            },
+                },
+                sdl.SDL_EVENT_KEY_DOWN => {
+                    if (event.key.key == sdl.SDLK_SPACE) {
+                        var window: ?*sdl.SDL_Window = null;
+                        var renderer: ?*sdl.SDL_Renderer = null;
+                        if (!sdl.SDL_CreateWindowAndRenderer("SDL3 with Zig", 600, 300, 0, &window, &renderer)) {
+                            printError(@src(), "SDL_CreateWindowAndRenderer failed: {s}\n", .{sdl.SDL_GetError()});
+                            return sdl.SDL_APP_FAILURE;
+                        }
+                        app.addAppWindow(window, renderer) catch {
+                            return sdl.SDL_APP_FAILURE;
+                        };
+                    }
+                },
+                else => {
+                    if (app.app_window_map.getPtr(window_id)) |app_window| {
+                        app_window.processEvent(event);
+                    }
+                },
+            }
         }
     }
 
@@ -187,19 +196,20 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
 }
 
 export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
-    _ = appstate;
-
-    var iterator = app.app_window_map.valueIterator();
-    while (iterator.next()) |app_window| {
-        app_window.update();
+    if (App.from_ptr(appstate)) |app| {
+        var iterator = app.app_window_map.valueIterator();
+        while (iterator.next()) |app_window| {
+            app_window.update();
+        }
     }
 
     return sdl.SDL_APP_CONTINUE;
 }
 
 export fn SDL_AppQuit(appstate: ?*anyopaque, result: sdl.SDL_AppResult) void {
-    _ = appstate;
     _ = result;
 
-    app.deinit();
+    if (App.from_ptr(appstate)) |app| {
+        app.deinit();
+    }
 }

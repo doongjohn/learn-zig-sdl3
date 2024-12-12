@@ -15,9 +15,10 @@ fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: a
     std.debug.print(fmt, args);
 }
 
-const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
-
 const App = struct {
+    const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
+    const renderer_backend = "vulkan";
+
     gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined,
     allocator: std.mem.Allocator = undefined,
     app_window_table: AppWindowTable = undefined,
@@ -37,7 +38,7 @@ const App = struct {
             printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
-        const renderer = sdl.SDL_CreateRenderer(window, "vulkan");
+        const renderer = sdl.SDL_CreateRenderer(window, renderer_backend);
         if (renderer == null) {
             printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlError;
@@ -196,7 +197,7 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                             printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
                             return sdl.SDL_APP_FAILURE;
                         }
-                        const renderer = sdl.SDL_CreateRenderer(window, "vulkan");
+                        const renderer = sdl.SDL_CreateRenderer(window, App.renderer_backend);
                         if (renderer == null) {
                             printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
                             return sdl.SDL_APP_FAILURE;

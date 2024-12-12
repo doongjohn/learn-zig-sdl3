@@ -15,10 +15,10 @@ fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: a
     std.debug.print(fmt, args);
 }
 
-const App = struct {
-    const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
-    const renderer_backend = "vulkan";
+const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
+const renderer_backend = "vulkan";
 
+const App = struct {
     gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined,
     allocator: std.mem.Allocator = undefined,
     app_window_table: AppWindowTable = undefined,
@@ -154,8 +154,8 @@ const AppWindow = struct {
     }
 };
 
-var app_buffer: [@sizeOf(App)]u8 = undefined;
-var app_fba = std.heap.FixedBufferAllocator.init(&app_buffer);
+var app_buf: [@sizeOf(App)]u8 = undefined;
+var app_fba = std.heap.FixedBufferAllocator.init(&app_buf);
 
 export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8) sdl.SDL_AppResult {
     _ = argc;
@@ -163,17 +163,19 @@ export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8
 
     if (appstate_ptr) |appstate| {
         var app = app_fba.allocator().create(App) catch {
+            printError(@src(), "App alloaction failed\n", .{});
             return sdl.SDL_APP_FAILURE;
         };
         app.init() catch {
+            printError(@src(), "App init failed\n", .{});
             return sdl.SDL_APP_FAILURE;
         };
         appstate.* = app;
+        return sdl.SDL_APP_CONTINUE;
     } else {
+        printError(@src(), "appstate_ptr is null\n", .{});
         return sdl.SDL_APP_FAILURE;
     }
-
-    return sdl.SDL_APP_CONTINUE;
 }
 
 export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SDL_AppResult {
@@ -197,7 +199,7 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                             printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
                             return sdl.SDL_APP_FAILURE;
                         }
-                        const renderer = sdl.SDL_CreateRenderer(window, App.renderer_backend);
+                        const renderer = sdl.SDL_CreateRenderer(window, renderer_backend);
                         if (renderer == null) {
                             printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
                             return sdl.SDL_APP_FAILURE;

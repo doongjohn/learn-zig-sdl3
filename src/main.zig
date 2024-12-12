@@ -33,18 +33,18 @@ const App = struct {
 
         if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
             printError(@src(), "SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.AppInitFailure;
+            return error.SdlError;
         }
 
         const window = sdl.SDL_CreateWindow("SDL3 with Zig", 600, 300, 0);
         if (window == null) {
             printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.AppInitFailure;
+            return error.SdlError;
         }
         const renderer = sdl.SDL_CreateRenderer(window, "vulkan");
         if (renderer == null) {
             printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.AppInitFailure;
+            return error.SdlError;
         }
         try self.addAppWindow(window, renderer);
     }
@@ -93,7 +93,7 @@ const AppWindow = struct {
     fn init(self: *@This()) !void {
         if (!sdl.SDL_SetWindowResizable(self.window, true)) {
             printError(@src(), "SDL_SetWindowResizable failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.AppWindowInitFaliure;
+            return error.SdlError;
         }
     }
 
@@ -119,6 +119,11 @@ const AppWindow = struct {
         };
         _ = sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT);
         _ = sdl.SDL_RenderFillRect(self.renderer, &rect);
+
+        _ = sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT);
+        _ = sdl.SDL_SetRenderScale(self.renderer, 2, 2);
+        _ = sdl.SDL_RenderDebugText(self.renderer, 5, 5, "Press Space to create a new window.");
+        _ = sdl.SDL_SetRenderScale(self.renderer, 1, 1);
 
         _ = sdl.SDL_RenderPresent(self.renderer);
     }

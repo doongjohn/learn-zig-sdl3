@@ -22,10 +22,6 @@ const App = struct {
     allocator: std.mem.Allocator = undefined,
     app_window_table: AppWindowTable = undefined,
 
-    fn from_ptr(ptr: ?*anyopaque) ?*@This() {
-        return @alignCast(@ptrCast(ptr));
-    }
-
     fn init(self: *@This()) !void {
         self.gpa = std.heap.GeneralPurposeAllocator(.{}){};
         self.allocator = self.gpa.allocator();
@@ -53,6 +49,10 @@ const App = struct {
         self.app_window_table.deinit();
     }
 
+    fn from_ptr(ptr: ?*anyopaque) ?*@This() {
+        return @alignCast(@ptrCast(ptr));
+    }
+
     fn addAppWindow(self: *@This(), window: ?*sdl.SDL_Window, renderer: ?*sdl.SDL_Renderer) !void {
         const window_id = sdl.SDL_GetWindowID(window);
         if (self.app_window_table.contains(window_id)) {
@@ -70,7 +70,9 @@ const App = struct {
                 self.removeAppWindow(aw);
                 if (self.app_window_table.count() == 0) {
                     var quit_event = sdl.SDL_Event{ .type = sdl.SDL_EVENT_QUIT };
-                    _ = sdl.SDL_PushEvent(&quit_event);
+                    if (!sdl.SDL_PushEvent(&quit_event)) {
+                        printError(@src(), "SDL_PushEvent failed: {s}\n", .{sdl.SDL_GetError()});
+                    }
                 }
             };
         }

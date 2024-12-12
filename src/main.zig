@@ -98,6 +98,13 @@ const AppWindow = struct {
             printError(@src(), "SDL_SetWindowResizable failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
+
+        var window_w: c_int = 0;
+        var window_h: c_int = 0;
+        if (sdl.SDL_GetWindowSize(self.window, &window_w, &window_h)) {
+            self.mouse_x = @floatFromInt(@divFloor(window_w, 2));
+            self.mouse_y = @floatFromInt(@divFloor(window_h, 2));
+        }
     }
 
     fn deinit(self: *@This()) void {

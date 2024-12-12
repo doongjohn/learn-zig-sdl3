@@ -142,7 +142,7 @@ const AppWindow = struct {
         switch (event.type) {
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN => {
                 const button = event.button.button;
-                std.debug.print("mouse down: {d}\n", .{button});
+                std.debug.print("window: {d}, mouse down: {d}\n", .{ self.window_id, button });
             },
             sdl.SDL_EVENT_MOUSE_MOTION => {
                 self.mouse_x = event.motion.x;

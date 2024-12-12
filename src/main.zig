@@ -67,17 +67,17 @@ const App = struct {
             .renderer = renderer,
         });
 
-        if (self.app_window_table.getPtr(window_id)) |aw| {
-            aw.init() catch {
-                self.removeAppWindow(aw);
-                if (self.app_window_table.count() == 0) {
-                    var quit_event = sdl.SDL_Event{ .type = sdl.SDL_EVENT_QUIT };
-                    if (!sdl.SDL_PushEvent(&quit_event)) {
-                        printError(@src(), "SDL_PushEvent failed: {s}\n", .{sdl.SDL_GetError()});
-                    }
+        var app_window = self.app_window_table.getPtr(window_id).?;
+
+        app_window.init() catch {
+            self.removeAppWindow(app_window);
+            if (self.app_window_table.count() == 0) {
+                var quit_event = sdl.SDL_Event{ .type = sdl.SDL_EVENT_QUIT };
+                if (!sdl.SDL_PushEvent(&quit_event)) {
+                    printError(@src(), "SDL_PushEvent failed: {s}\n", .{sdl.SDL_GetError()});
                 }
-            };
-        }
+            }
+        };
     }
 
     fn removeAppWindow(self: *@This(), app_window: *AppWindow) void {

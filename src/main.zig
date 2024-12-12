@@ -47,6 +47,7 @@ const App = struct {
 
     fn deinit(self: *@This()) void {
         self.app_window_table.deinit();
+        std.debug.assert(self.gpa.deinit() == .ok);
     }
 
     fn from_ptr(ptr: ?*anyopaque) ?*@This() {

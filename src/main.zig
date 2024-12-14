@@ -10,15 +10,16 @@ const sdl = @cImport({
     @cInclude("SDL3/SDL_main.h");
 });
 
-fn sdlFnResult(result: bool) !void {
-    if (!result) {
-        return error.SdlError;
-    }
-}
-
 fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
     std.debug.print("[ERROR]: \"{s}:{d}:{d}\" ", .{ src.file.ptr, src.line, src.column });
     std.debug.print(fmt, args);
+}
+
+fn sdlFnResult(src: std.builtin.SourceLocation, result: bool) !void {
+    if (!result) {
+        printError(src, "SDL error: {s}\n", .{sdl.SDL_GetError()});
+        return error.SdlError;
+    }
 }
 
 const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
@@ -125,8 +126,8 @@ const AppWindow = struct {
         const green: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 2 / 3));
         const blue: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 4 / 3));
 
-        try sdlFnResult(sdl.SDL_SetRenderDrawColorFloat(self.renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT));
-        try sdlFnResult(sdl.SDL_RenderClear(self.renderer));
+        try sdlFnResult(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT));
+        try sdlFnResult(@src(), sdl.SDL_RenderClear(self.renderer));
 
         const rect = sdl.SDL_FRect{
             .x = self.mouse_x - 25,
@@ -134,15 +135,15 @@ const AppWindow = struct {
             .w = 50,
             .h = 50,
         };
-        try sdlFnResult(sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
-        try sdlFnResult(sdl.SDL_RenderFillRect(self.renderer, &rect));
+        try sdlFnResult(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
+        try sdlFnResult(@src(), sdl.SDL_RenderFillRect(self.renderer, &rect));
 
-        try sdlFnResult(sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
-        try sdlFnResult(sdl.SDL_SetRenderScale(self.renderer, 2, 2));
-        try sdlFnResult(sdl.SDL_RenderDebugText(self.renderer, 5, 5, "Press Space to create a new window."));
-        try sdlFnResult(sdl.SDL_SetRenderScale(self.renderer, 1, 1));
+        try sdlFnResult(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
+        try sdlFnResult(@src(), sdl.SDL_SetRenderScale(self.renderer, 2, 2));
+        try sdlFnResult(@src(), sdl.SDL_RenderDebugText(self.renderer, 5, 5, "Press Space to create a new window."));
+        try sdlFnResult(@src(), sdl.SDL_SetRenderScale(self.renderer, 1, 1));
 
-        try sdlFnResult(sdl.SDL_RenderPresent(self.renderer));
+        try sdlFnResult(@src(), sdl.SDL_RenderPresent(self.renderer));
     }
 
     fn processEvent(self: *@This(), event: *sdl.SDL_Event) void {
@@ -233,7 +234,7 @@ export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
         while (iterator.next()) |app_window| {
             app_window.update() catch |err| switch (err) {
                 error.SdlError => {
-                    printError(@src(), "SDL error: {s}\n", .{sdl.SDL_GetError()});
+                    printError(@src(), "Update failed for window: {d}.\n", .{app_window.window_id});
                     return sdl.SDL_APP_FAILURE;
                 },
             };

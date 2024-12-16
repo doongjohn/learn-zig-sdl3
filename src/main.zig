@@ -63,6 +63,10 @@ const App = struct {
     }
 
     fn addAppWindow(self: *@This(), window: ?*sdl.SDL_Window, renderer: ?*sdl.SDL_Renderer) !void {
+        if (window == null or renderer == null) {
+            return error.InvalidParameter;
+        }
+
         const window_id = sdl.SDL_GetWindowID(window);
         if (self.app_window_table.contains(window_id)) {
             return;
@@ -235,6 +239,7 @@ export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
             app_window.update() catch |err| switch (err) {
                 error.SdlError => {
                     printError(@src(), "Update failed for window: {d}.\n", .{app_window.window_id});
+                    if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st.*);
                     return sdl.SDL_APP_FAILURE;
                 },
             };

@@ -88,6 +88,7 @@ const App = struct {
                     printError(@src(), "SDL_PushEvent failed: {s}\n", .{sdl.SDL_GetError()});
                 }
             }
+            return error.InitError;
         };
     }
 
@@ -216,6 +217,7 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                             return sdl.SDL_APP_FAILURE;
                         }
                         app.addAppWindow(window, renderer) catch {
+                            if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st.*);
                             return sdl.SDL_APP_FAILURE;
                         };
                     }

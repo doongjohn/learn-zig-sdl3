@@ -11,7 +11,7 @@ const sdl = @cImport({
 });
 
 fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
-    std.debug.print("[ERROR]: \"{s}:{d}:{d}\" ", .{ src.file.ptr, src.line, src.column });
+    std.debug.print("[ERROR]: \"{s}:{d}:{d}\" ", .{ src.file, src.line, src.column });
     std.debug.print(fmt, args);
 }
 

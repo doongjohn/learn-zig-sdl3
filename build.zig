@@ -36,22 +36,22 @@ pub fn build(b: *std.Build) !void {
     sdl3_git_clone.cwd = b.path("vendor/");
 
     // sdl3 cmake configure
-    const cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", sdl3_src_dir, "-B", sdl3_build_dir, "-G", "Ninja" });
-    cmake_configure.setEnvironmentVariable("CC", "clang");
-    cmake_configure.setEnvironmentVariable("CXX", "clang++");
+    const sdl3_cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", sdl3_src_dir, "-B", sdl3_build_dir, "-G", "Ninja" });
+    sdl3_cmake_configure.setEnvironmentVariable("CC", "clang");
+    sdl3_cmake_configure.setEnvironmentVariable("CXX", "clang++");
     switch (optimize) {
-        .Debug => cmake_configure.addArg("-DCMAKE_BUILD_TYPE=Debug"),
-        else => cmake_configure.addArg("-DCMAKE_BUILD_TYPE=Release"),
+        .Debug => sdl3_cmake_configure.addArg("-DCMAKE_BUILD_TYPE=Debug"),
+        else => sdl3_cmake_configure.addArg("-DCMAKE_BUILD_TYPE=Release"),
     }
     _ = std.fs.cwd().access(sdl3_src_dir, .{}) catch |err| switch (err) {
-        error.FileNotFound => cmake_configure.step.dependOn(&sdl3_git_clone.step),
+        error.FileNotFound => sdl3_cmake_configure.step.dependOn(&sdl3_git_clone.step),
         else => return err,
     };
 
     // sdl3 cmake build
     const sdl3_cmake_build = b.addSystemCommand(&.{ "cmake", "--build", sdl3_build_dir });
     _ = std.fs.cwd().access(sdl3_build_dir, .{}) catch |err| switch (err) {
-        error.FileNotFound => sdl3_cmake_build.step.dependOn(&cmake_configure.step),
+        error.FileNotFound => sdl3_cmake_build.step.dependOn(&sdl3_cmake_configure.step),
         else => return err,
     };
 

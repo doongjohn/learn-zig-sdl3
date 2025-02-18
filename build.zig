@@ -36,8 +36,9 @@ pub fn build(b: *std.Build) !void {
     sdl3_git_clone.cwd = b.path("vendor/");
 
     // sdl3 cmake configure
-    const cmake_configure = b.addSystemCommand(&.{ "cmake", "-B", sdl3_build_dir, "-G", "Ninja" });
-    cmake_configure.cwd = b.path(sdl3_src_dir);
+    const cmake_configure = b.addSystemCommand(&.{ "cmake", "-S", sdl3_src_dir, "-B", sdl3_build_dir, "-G", "Ninja" });
+    cmake_configure.setEnvironmentVariable("CC", "clang");
+    cmake_configure.setEnvironmentVariable("CXX", "clang++");
     switch (optimize) {
         .Debug => cmake_configure.addArg("-DCMAKE_BUILD_TYPE=Debug"),
         else => cmake_configure.addArg("-DCMAKE_BUILD_TYPE=Release"),

@@ -26,12 +26,12 @@ const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
 const renderer_backend = "vulkan";
 
 const App = struct {
-    gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined,
+    gpa: std.heap.DebugAllocator(.{}) = undefined,
     allocator: std.mem.Allocator = undefined,
     app_window_table: AppWindowTable = undefined,
 
     fn init(self: *@This()) !void {
-        self.gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        self.gpa = .init;
         self.allocator = self.gpa.allocator();
         self.app_window_table = AppWindowTable.init(self.allocator);
 

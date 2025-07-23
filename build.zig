@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) !void {
     };
 
     // SDL3 git clone
-    const sdl3_git_clone = b.addSystemCommand(&.{ "git", "clone", "https://github.com/libsdl-org/SDL.git" });
+    const sdl3_git_clone = b.addSystemCommand(&.{ "git", "clone", "-b", "release-3.2.18", "--depth=1", "https://github.com/libsdl-org/SDL.git" });
     sdl3_git_clone.cwd = b.path("vendor/");
 
     // SDL3 cmake configure
@@ -72,7 +72,7 @@ pub fn build(b: *std.Build) !void {
     {
         exe.step.dependOn(&sdl3_cmake_build.step);
         exe.addIncludePath(b.path(sdl3_include_dir));
-        exe.addLibraryPath(.{ .cwd_relative = b.exe_dir });
+        exe.addLibraryPath(b.path(sdl3_build_dir));
         exe.linkSystemLibrary("SDL3");
     }
 

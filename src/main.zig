@@ -1,3 +1,4 @@
+// zig project with the main function being in C:
 // https://gist.github.com/andrewrk/c1c3eebd0a102cd8c923058cae95532c
 pub const _start = void;
 pub const WinMainCRTStartup = void;
@@ -11,13 +12,12 @@ const sdl = @cImport({
 });
 
 fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
-    std.debug.print("[ERROR]: \"{s}:{d}:{d}\" ", .{ src.file, src.line, src.column });
-    std.debug.print(fmt, args);
+    std.log.err("'{s}:{d}:{d}' -> " ++ fmt, .{ src.file, src.line, src.column } ++ args);
 }
 
-fn sdlFnResult(src: std.builtin.SourceLocation, result: bool) !void {
+fn sdlCall(src: std.builtin.SourceLocation, result: bool) !void {
     if (!result) {
-        printError(src, "SDL error: {s}\n", .{sdl.SDL_GetError()});
+        printError(src, "SDL error: {s}", .{sdl.SDL_GetError()});
         return error.SdlError;
     }
 }
@@ -36,20 +36,22 @@ const App = struct {
         self.app_window_table = AppWindowTable.init(self.allocator);
 
         if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
-            printError(@src(), "SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
+            printError(@src(), "SDL_Init failed: {s}", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
 
         const window = sdl.SDL_CreateWindow("SDL3 with Zig", 600, 300, 0);
         if (window == null) {
-            printError(@src(), "SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
+            printError(@src(), "SDL_CreateWindow failed: {s}", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
+
         const renderer = sdl.SDL_CreateRenderer(window, renderer_backend);
         if (renderer == null) {
-            printError(@src(), "SDL_CreateRenderer failed: {s}\n", .{sdl.SDL_GetError()});
+            printError(@src(), "SDL_CreateRenderer failed: {s}", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
+
         try self.addAppWindow(window, renderer);
     }
 
@@ -85,7 +87,7 @@ const App = struct {
             if (self.app_window_table.count() == 0) {
                 var quit_event = sdl.SDL_Event{ .type = sdl.SDL_EVENT_QUIT };
                 if (!sdl.SDL_PushEvent(&quit_event)) {
-                    printError(@src(), "SDL_PushEvent failed: {s}\n", .{sdl.SDL_GetError()});
+                    printError(@src(), "SDL_PushEvent failed: {s}", .{sdl.SDL_GetError()});
                 }
             }
             return error.InitError;
@@ -131,8 +133,8 @@ const AppWindow = struct {
         const green: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 2 / 3));
         const blue: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 4 / 3));
 
-        try sdlFnResult(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT));
-        try sdlFnResult(@src(), sdl.SDL_RenderClear(self.renderer));
+        try sdlCall(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT));
+        try sdlCall(@src(), sdl.SDL_RenderClear(self.renderer));
 
         const rect = sdl.SDL_FRect{
             .x = self.mouse_x - 25,
@@ -140,15 +142,15 @@ const AppWindow = struct {
             .w = 50,
             .h = 50,
         };
-        try sdlFnResult(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
-        try sdlFnResult(@src(), sdl.SDL_RenderFillRect(self.renderer, &rect));
+        try sdlCall(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
+        try sdlCall(@src(), sdl.SDL_RenderFillRect(self.renderer, &rect));
 
-        try sdlFnResult(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
-        try sdlFnResult(@src(), sdl.SDL_SetRenderScale(self.renderer, 2, 2));
-        try sdlFnResult(@src(), sdl.SDL_RenderDebugText(self.renderer, 5, 5, "Press Space to create a new window."));
-        try sdlFnResult(@src(), sdl.SDL_SetRenderScale(self.renderer, 1, 1));
+        try sdlCall(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, sdl.SDL_ALPHA_OPAQUE_FLOAT));
+        try sdlCall(@src(), sdl.SDL_SetRenderScale(self.renderer, 2, 2));
+        try sdlCall(@src(), sdl.SDL_RenderDebugText(self.renderer, 5, 5, "Press Space to create a new window."));
+        try sdlCall(@src(), sdl.SDL_SetRenderScale(self.renderer, 1, 1));
 
-        try sdlFnResult(@src(), sdl.SDL_RenderPresent(self.renderer));
+        try sdlCall(@src(), sdl.SDL_RenderPresent(self.renderer));
     }
 
     fn processEvent(self: *@This(), event: *sdl.SDL_Event) void {
@@ -175,17 +177,17 @@ export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8
 
     if (appstate_ptr) |appstate| {
         var app = app_fba.allocator().create(App) catch {
-            printError(@src(), "App alloaction failed\n", .{});
+            printError(@src(), "App alloaction failed", .{});
             return sdl.SDL_APP_FAILURE;
         };
         app.init() catch {
-            printError(@src(), "App init failed\n", .{});
+            printError(@src(), "App init failed", .{});
             return sdl.SDL_APP_FAILURE;
         };
         appstate.* = app;
         return sdl.SDL_APP_CONTINUE;
     } else {
-        printError(@src(), "appstate_ptr is null\n", .{});
+        printError(@src(), "appstate_ptr is null", .{});
         return sdl.SDL_APP_FAILURE;
     }
 }

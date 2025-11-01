@@ -61,7 +61,7 @@ const App = struct {
     }
 
     fn from_ptr(ptr: ?*anyopaque) ?*@This() {
-        return @alignCast(@ptrCast(ptr));
+        return @ptrCast(@alignCast(ptr));
     }
 
     fn addAppWindow(self: *@This(), window: ?*sdl.SDL_Window, renderer: ?*sdl.SDL_Renderer) !void {
@@ -219,7 +219,7 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                             return sdl.SDL_APP_FAILURE;
                         }
                         app.addAppWindow(window, renderer) catch {
-                            if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st.*);
+                            if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st);
                             return sdl.SDL_APP_FAILURE;
                         };
                     }
@@ -243,7 +243,7 @@ export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
             app_window.update() catch |err| switch (err) {
                 error.SdlError => {
                     printError(@src(), "Update failed for window: {d}.\n", .{app_window.window_id});
-                    if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st.*);
+                    if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st);
                     return sdl.SDL_APP_FAILURE;
                 },
             };

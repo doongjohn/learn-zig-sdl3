@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) !void {
 
     // SDL3
     var lib_sdl3 = LibSdl3.init(b, target, optimize);
-    try lib_sdl3.build("release-3.2.18");
+    try lib_sdl3.build("release-3.2.26");
     lib_sdl3.link(exe);
     lib_sdl3.install();
 

@@ -1,6 +1,10 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
+    var io_impl = std.Io.Threaded.init(b.allocator, .{ .environ = .empty });
+    defer io_impl.deinit();
+    const io = io_impl.io();
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -18,14 +22,14 @@ pub fn build(b: *std.Build) !void {
     b.installArtifact(exe);
 
     // Create vendor dir
-    std.fs.cwd().makeDir("vendor") catch |err| switch (err) {
+    std.Io.Dir.cwd().createDir(io, "vendor", .default_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
 
     // SDL3
     var lib_sdl3 = LibSdl3.init(b, target, optimize);
-    try lib_sdl3.build("release-3.2.26");
+    try lib_sdl3.build(io, "release-3.4.0");
     lib_sdl3.link(exe);
     lib_sdl3.install();
 
@@ -78,7 +82,7 @@ const LibSdl3 = struct {
         };
     }
 
-    pub fn build(this: *@This(), git_tag: []const u8) !void {
+    pub fn build(this: *@This(), io: std.Io, git_tag: []const u8) !void {
         const b = this.b;
 
         // git clone
@@ -94,14 +98,14 @@ const LibSdl3 = struct {
             .Debug => cmake_conf.addArg("-DCMAKE_BUILD_TYPE=Debug"),
             else => cmake_conf.addArg("-DCMAKE_BUILD_TYPE=Release"),
         }
-        _ = std.fs.cwd().access(this.source_dir, .{}) catch |err| switch (err) {
+        _ = std.Io.Dir.cwd().access(io, this.source_dir, .{}) catch |err| switch (err) {
             error.FileNotFound => cmake_conf.step.dependOn(&git_clone.step),
             else => return err,
         };
 
         // cmake build
         this.cmake_build = b.addSystemCommand(&.{ "cmake", "--build", this.build_dir });
-        _ = std.fs.cwd().access(this.build_dir, .{}) catch |err| switch (err) {
+        _ = std.Io.Dir.cwd().access(io, this.build_dir, .{}) catch |err| switch (err) {
             error.FileNotFound => this.cmake_build.?.step.dependOn(&cmake_conf.step),
             else => return err,
         };
@@ -113,9 +117,9 @@ const LibSdl3 = struct {
         const b = this.b;
 
         exe.step.dependOn(&this.cmake_build.?.step);
-        exe.addIncludePath(b.path(this.include_dir));
-        exe.addLibraryPath(b.path(this.build_dir));
-        exe.linkSystemLibrary("SDL3");
+        exe.root_module.addIncludePath(b.path(this.include_dir));
+        exe.root_module.addLibraryPath(b.path(this.build_dir));
+        exe.root_module.linkSystemLibrary("SDL3", .{});
     }
 
     pub fn install(this: *@This()) void {

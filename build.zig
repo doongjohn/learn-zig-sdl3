@@ -8,6 +8,13 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const sdl = b.addTranslateC(.{
+        .root_source_file = b.path("src/sdl.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    sdl.addIncludePath(b.path("vendor/SDL/include"));
+
     const exe = b.addExecutable(.{
         .name = "learn-zig-sdl3",
         .root_module = b.createModule(.{
@@ -15,6 +22,12 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
+            .imports = &.{
+                .{
+                    .name = "sdl",
+                    .module = sdl.createModule(),
+                },
+            },
         }),
     });
     exe.subsystem = .Console;

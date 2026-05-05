@@ -3,13 +3,18 @@
 pub const _start = void;
 pub const WinMainCRTStartup = void;
 
-const std = @import("std");
+const builtin = @import("builtin");
+const is_wasm = builtin.cpu.arch.isWasm();
 
-const sdl = @cImport({
-    @cDefine("SDL_MAIN_USE_CALLBACKS", "1");
-    @cInclude("SDL3/SDL.h");
-    @cInclude("SDL3/SDL_main.h");
-});
+const std = @import("std");
+const sdl = @import("sdl");
+
+const use_debug_allocator = !is_wasm and switch (builtin.mode) {
+    .Debug => true,
+    .ReleaseSafe => !builtin.link_libc,
+    .ReleaseFast, .ReleaseSmall => !builtin.link_libc and builtin.single_threaded,
+};
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
     std.log.err("'{s}:{d}:{d}' -> " ++ fmt, .{ src.file, src.line, src.column } ++ args);
@@ -26,13 +31,21 @@ const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
 const renderer_backend = "vulkan";
 
 const App = struct {
-    gpa: std.heap.DebugAllocator(.{}) = undefined,
     allocator: std.mem.Allocator = undefined,
     app_window_table: AppWindowTable = undefined,
 
     fn init(self: *@This()) !void {
-        self.gpa = .init;
-        self.allocator = self.gpa.allocator();
+        self.allocator = if (use_debug_allocator)
+            debug_allocator.allocator()
+        else if (builtin.link_libc)
+            std.heap.c_allocator
+        else if (is_wasm)
+            std.heap.wasm_allocator
+        else if (!builtin.single_threaded)
+            std.heap.smp_allocator
+        else
+            comptime unreachable;
+
         self.app_window_table = AppWindowTable.init(self.allocator);
 
         if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
@@ -57,7 +70,9 @@ const App = struct {
 
     fn deinit(self: *@This()) void {
         self.app_window_table.deinit();
-        std.debug.assert(self.gpa.deinit() == .ok);
+        if (use_debug_allocator) {
+            std.debug.assert(debug_allocator.deinit() == .ok);
+        }
     }
 
     fn from_ptr(ptr: ?*anyopaque) ?*@This() {
@@ -219,7 +234,8 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                             return sdl.SDL_APP_FAILURE;
                         }
                         app.addAppWindow(window, renderer) catch {
-                            if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st);
+                            printError(@src(), "addAppWindow failed\n", .{});
+                            if (@errorReturnTrace()) |et| std.debug.dumpErrorReturnTrace(et);
                             return sdl.SDL_APP_FAILURE;
                         };
                     }
@@ -243,7 +259,7 @@ export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
             app_window.update() catch |err| switch (err) {
                 error.SdlError => {
                     printError(@src(), "Update failed for window: {d}.\n", .{app_window.window_id});
-                    if (@errorReturnTrace()) |st| std.debug.dumpStackTrace(st);
+                    if (@errorReturnTrace()) |et| std.debug.dumpErrorReturnTrace(et);
                     return sdl.SDL_APP_FAILURE;
                 },
             };

@@ -8,31 +8,6 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const sdl = b.addTranslateC(.{
-        .root_source_file = b.path("src/sdl.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-    sdl.addIncludePath(b.path("vendor/SDL/include"));
-
-    const exe = b.addExecutable(.{
-        .name = "learn-zig-sdl3",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-            .imports = &.{
-                .{
-                    .name = "sdl",
-                    .module = sdl.createModule(),
-                },
-            },
-        }),
-    });
-    exe.subsystem = .Console;
-    b.installArtifact(exe);
-
     // Create vendor dir
     std.Io.Dir.cwd().createDirPath(io, "vendor") catch |err| switch (err) {
         error.PathAlreadyExists => {},
@@ -41,28 +16,46 @@ pub fn build(b: *std.Build) !void {
 
     // SDL3
     var lib_sdl3 = LibSdl3.init(b, target, optimize);
-    try lib_sdl3.build(io, "release-3.4.0");
-    lib_sdl3.link(exe);
+    try lib_sdl3.build(io, "release-3.4.8");
     lib_sdl3.install();
+
+    const exe = b.addExecutable(.{
+        .name = "learn-zig-sdl3",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{
+                    .name = "sdl",
+                    .module = lib_sdl3.sdl_c.?.createModule(),
+                },
+            },
+        }),
+    });
+    exe.subsystem = .Console;
+
+    lib_sdl3.link(exe);
+    b.installArtifact(exe);
 
     // Run exe
     const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&(blk: {
+    run_step.dependOn(blk: {
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(b.getInstallStep());
         run_cmd.addArgs(b.args orelse &.{});
-        break :blk run_cmd;
-    }).step);
-
-    // Tests
-    const exe_unit_tests = b.addTest(.{
-        .root_module = exe.root_module,
+        break :blk &run_cmd.step;
     });
 
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
+    // Tests
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
+    test_step.dependOn(blk: {
+        const exe_unit_tests = b.addTest(.{
+            .root_module = exe.root_module,
+        });
+        const run_cmd = b.addRunArtifact(exe_unit_tests);
+        break :blk &run_cmd.step;
+    });
 }
 
 const LibSdl3 = struct {
@@ -75,6 +68,7 @@ const LibSdl3 = struct {
     build_dir: []const u8,
 
     cmake_build: ?*std.Build.Step.Run = null,
+    sdl_c: ?*std.Build.Step.TranslateC = null,
 
     pub fn init(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) @This() {
         const source_dir = "vendor/SDL/";
@@ -92,6 +86,25 @@ const LibSdl3 = struct {
             .include_dir = include_dir,
             .build_dir = build_dir,
         };
+    }
+
+    fn is_built(this: *@This(), io: std.Io) !bool {
+        const b = this.b;
+
+        switch (this.target.result.os.tag) {
+            .windows => {
+                const dll_path = b.pathJoin(&.{ this.build_dir, "SDL3.dll" });
+                _ = std.Io.Dir.cwd().access(io, dll_path, .{}) catch |err| switch (err) {
+                    error.FileNotFound => return false,
+                    else => return err,
+                };
+            },
+            else => {
+                @panic("TODO");
+            },
+        }
+
+        return true;
     }
 
     pub fn build(this: *@This(), io: std.Io, git_tag: []const u8) !void {
@@ -117,25 +130,33 @@ const LibSdl3 = struct {
 
         // cmake build
         this.cmake_build = b.addSystemCommand(&.{ "cmake", "--build", this.build_dir });
-        _ = std.Io.Dir.cwd().access(io, this.build_dir, .{}) catch |err| switch (err) {
-            error.FileNotFound => this.cmake_build.?.step.dependOn(&cmake_conf.step),
-            else => return err,
-        };
+        this.cmake_build.?.step.dependOn(&cmake_conf.step);
+
+        // translate c
+        this.sdl_c = b.addTranslateC(.{
+            .root_source_file = b.path("src/sdl.h"),
+            .target = this.target,
+            .optimize = this.optimize,
+        });
+        this.sdl_c.?.addIncludePath(b.path("vendor/SDL/include"));
+        if (!try this.is_built(io)) {
+            this.sdl_c.?.step.dependOn(&this.cmake_build.?.step);
+        }
     }
 
     pub fn link(this: *@This(), exe: *std.Build.Step.Compile) void {
-        std.debug.assert(this.cmake_build != null);
+        std.debug.assert(this.sdl_c != null);
 
         const b = this.b;
 
-        exe.step.dependOn(&this.cmake_build.?.step);
+        exe.step.dependOn(&this.sdl_c.?.step);
         exe.root_module.addIncludePath(b.path(this.include_dir));
         exe.root_module.addLibraryPath(b.path(this.build_dir));
         exe.root_module.linkSystemLibrary("SDL3", .{});
     }
 
     pub fn install(this: *@This()) void {
-        std.debug.assert(this.cmake_build != null);
+        std.debug.assert(this.sdl_c != null);
 
         const b = this.b;
 
@@ -143,7 +164,7 @@ const LibSdl3 = struct {
             .windows => {
                 const dll_path = b.pathJoin(&.{ this.build_dir, "SDL3.dll" });
                 const dll_install = b.addInstallBinFile(b.path(dll_path), "SDL3.dll");
-                dll_install.step.dependOn(&this.cmake_build.?.step);
+                dll_install.step.dependOn(&this.sdl_c.?.step);
                 b.getInstallStep().dependOn(&dll_install.step);
             },
             else => {

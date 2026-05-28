@@ -17,25 +17,23 @@ pub fn build(b: *std.Build) !void {
     // SDL3
     var lib_sdl3 = LibSdl3.init(b, target, optimize);
     try lib_sdl3.build(io, "release-3.4.8");
-    lib_sdl3.install();
+
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_mod.addImport("sdl", lib_sdl3.sdl_c.?.createModule());
 
     const exe = b.addExecutable(.{
         .name = "learn-zig-sdl3",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{
-                    .name = "sdl",
-                    .module = lib_sdl3.sdl_c.?.createModule(),
-                },
-            },
-        }),
+        .root_module = exe_mod,
     });
     exe.subsystem = .Console;
 
     lib_sdl3.link(exe);
+
+    lib_sdl3.install();
     b.installArtifact(exe);
 
     // Run exe
@@ -49,13 +47,9 @@ pub fn build(b: *std.Build) !void {
 
     // Tests
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(blk: {
-        const exe_unit_tests = b.addTest(.{
-            .root_module = exe.root_module,
-        });
-        const run_cmd = b.addRunArtifact(exe_unit_tests);
-        break :blk &run_cmd.step;
-    });
+    test_step.dependOn(&b.addRunArtifact(b.addTest(.{
+        .root_module = exe_mod,
+    })).step);
 }
 
 const LibSdl3 = struct {

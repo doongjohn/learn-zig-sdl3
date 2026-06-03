@@ -5,7 +5,6 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // SDL3
     var lib_sdl3 = LibSdl3.init(b, target, optimize);
     try lib_sdl3.build();
 
@@ -27,7 +26,6 @@ pub fn build(b: *std.Build) !void {
     lib_sdl3.install();
     b.installArtifact(exe);
 
-    // Run exe
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(blk: {
         const run_cmd = b.addRunArtifact(exe);
@@ -36,7 +34,6 @@ pub fn build(b: *std.Build) !void {
         break :blk &run_cmd.step;
     });
 
-    // Tests
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(b.addTest(.{
         .root_module = exe_mod,

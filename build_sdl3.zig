@@ -138,7 +138,7 @@ pub const LibSdl3 = struct {
         };
     }
 
-    pub fn link(this: *@This(), exe: *std.Build.Step.Compile) void {
+    pub fn link(this: *const @This(), exe: *std.Build.Step.Compile) void {
         const b = this.b;
 
         exe.step.dependOn(&this.c.step);
@@ -146,7 +146,7 @@ pub const LibSdl3 = struct {
         exe.root_module.linkSystemLibrary("SDL3", .{});
     }
 
-    pub fn install(this: *@This()) void {
+    pub fn install(this: *const @This()) void {
         const b = this.b;
 
         const lib_path = getLibPath(this.optimize);

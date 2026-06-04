@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    var lib_sdl3 = try LibSdl3.init(b, target, optimize);
+    const lib_sdl3 = try LibSdl3.init(b, target, optimize);
     const lib_sdl3_c = lib_sdl3.c.createModule();
 
     const exe_mod = b.createModule(.{

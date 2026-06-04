@@ -45,6 +45,9 @@ pub fn main(init: std.process.Init) !void {
         break :blk .Debug;
     };
 
+    const build_dir = getBuildDir(optimize);
+    const lib_path = getLibPath(optimize);
+
     // Create vendor dir
     std.Io.Dir.cwd().createDirPath(io, "vendor") catch |err| switch (err) {
         error.PathAlreadyExists => {},
@@ -54,7 +57,9 @@ pub fn main(init: std.process.Init) !void {
     // SDL git clone.
     std.Io.Dir.cwd().access(io, root_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            var git_clone = try std.process.spawn(io, .{ .argv = &.{ "git", "clone", "--depth=1", "-b", git_tag, git_url, root_dir } });
+            var git_clone = try std.process.spawn(io, .{
+                .argv = &.{ "git", "clone", "--depth=1", "-b", git_tag, git_url, root_dir },
+            });
             const git_clone_res = try git_clone.wait(io);
             if (!git_clone_res.success()) {
                 return error.GitCloneFailed;
@@ -64,24 +69,25 @@ pub fn main(init: std.process.Init) !void {
     };
 
     // Run cmake.
-    std.Io.Dir.cwd().access(io, getLibPath(optimize), .{}) catch |err| switch (err) {
+    std.Io.Dir.cwd().access(io, lib_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             // cmake configure
-            var cmake_conf_args: std.ArrayList([]const u8) = .empty;
-            try cmake_conf_args.appendSlice(alloc, &.{ "cmake", "-S", root_dir, "-B", getBuildDir(optimize), "-G", "Ninja" });
-            try cmake_conf_args.append(alloc, switch (optimize) {
+            var cmake_conf_argv: std.ArrayList([]const u8) = .empty;
+            try cmake_conf_argv.appendSlice(alloc, &.{ "cmake", "-S", root_dir, "-B", build_dir, "-G", "Ninja" });
+            try cmake_conf_argv.append(alloc, switch (optimize) {
                 .Debug => "-DCMAKE_BUILD_TYPE=Debug",
                 .ReleaseSafe => "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
                 .ReleaseFast => "-DCMAKE_BUILD_TYPE=Release",
                 .ReleaseSmall => "-DCMAKE_BUILD_TYPE=MinSizeRel",
             });
 
+            // TODO: use cmake toolchain file for cross compilation.
             var cmake_conf_env = try std.process.Environ.createMap(init.minimal.environ, alloc);
             if (cmake_conf_env.get("CC") == null) try cmake_conf_env.put("CC", "clang");
             if (cmake_conf_env.get("CXX") == null) try cmake_conf_env.put("CXX", "clang++");
 
             var cmake_conf = try std.process.spawn(io, .{
-                .argv = cmake_conf_args.items,
+                .argv = cmake_conf_argv.items,
                 .environ_map = &cmake_conf_env,
             });
             const cmake_conf_res = try cmake_conf.wait(io);
@@ -89,8 +95,7 @@ pub fn main(init: std.process.Init) !void {
 
             // cmake build
             var cmake_build = try std.process.spawn(io, .{
-                .argv = &.{ "cmake", "--build", getBuildDir(optimize) },
-                .environ_map = &cmake_conf_env,
+                .argv = &.{ "cmake", "--build", build_dir },
             });
             const cmake_build_res = try cmake_build.wait(io);
             if (!cmake_build_res.success()) return error.CmakeBuildFailed;

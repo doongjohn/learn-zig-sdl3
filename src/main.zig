@@ -16,11 +16,11 @@ const use_debug_allocator = !is_wasm and switch (builtin.mode) {
 };
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-fn printError(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+fn printError(src: std.lang.SourceLocation, comptime fmt: []const u8, args: anytype) void {
     std.log.err("'{s}:{d}:{d}' -> " ++ fmt, .{ src.file, src.line, src.column } ++ args);
 }
 
-fn sdlCall(src: std.builtin.SourceLocation, result: bool) !void {
+fn sdlCall(src: std.lang.SourceLocation, result: bool) !void {
     if (!result) {
         printError(src, "SDL error: {s}", .{sdl.SDL_GetError()});
         return error.SdlError;

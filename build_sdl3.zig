@@ -103,3 +103,60 @@ pub fn main(init: std.process.Init) !void {
         else => return err,
     };
 }
+
+pub const LibSdl3 = struct {
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.lang.OptimizeMode,
+    c: *std.Build.Step.TranslateC,
+
+    pub fn init(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.lang.OptimizeMode) !@This() {
+        var build_sdl3_argv: std.ArrayList([]const u8) = .empty;
+        try build_sdl3_argv.appendSlice(b.allocator, &.{ "zig", "run", "build_sdl3.zig", "--" });
+        try build_sdl3_argv.append(b.allocator, switch (optimize) {
+            .Debug => "-Doptimize=Debug",
+            .ReleaseSafe => "-Doptimize=ReleaseSafe",
+            .ReleaseFast => "-Doptimize=ReleaseFast",
+            .ReleaseSmall => "-Doptimize=ReleaseSmall",
+        });
+        const build_sdl3_cmd = b.addSystemCommand(build_sdl3_argv.items);
+
+        // translate c
+        const c = b.addTranslateC(.{
+            .root_source_file = b.path("src/sdl.h"),
+            .target = target,
+            .optimize = .Debug,
+        });
+        c.addIncludePath(b.path("vendor/SDL/include"));
+        c.step.dependOn(&build_sdl3_cmd.step);
+
+        return .{
+            .b = b,
+            .target = target,
+            .optimize = optimize,
+            .c = c,
+        };
+    }
+
+    pub fn link(this: *@This(), exe: *std.Build.Step.Compile) void {
+        const b = this.b;
+
+        exe.step.dependOn(&this.c.step);
+        exe.root_module.addLibraryPath(b.path(getBuildDir(this.optimize)));
+        exe.root_module.linkSystemLibrary("SDL3", .{});
+    }
+
+    pub fn install(this: *@This()) void {
+        const b = this.b;
+
+        const lib_path = getLibPath(this.optimize);
+        switch (this.target.result.os.tag) {
+            .windows => {
+                const lib_install = b.addInstallBinFile(b.path(lib_path), "SDL3.dll");
+                lib_install.step.dependOn(&this.c.step);
+                b.getInstallStep().dependOn(&lib_install.step);
+            },
+            else => @panic("TODO"),
+        }
+    }
+};

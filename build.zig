@@ -1,7 +1,6 @@
 const std = @import("std");
 
-const build_sdl3 = @import("build_sdl3.zig");
-const LibSdl3 = build_sdl3.LibSdl3;
+const LibSdl3 = @import("build_sdl3.zig").LibSdl3;
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});

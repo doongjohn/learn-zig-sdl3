@@ -62,15 +62,15 @@ const LibSdl3 = struct {
     pub fn build(this: *@This()) !void {
         const b = this.b;
 
-        var build_sdl3_args: std.ArrayList([]const u8) = .empty;
-        try build_sdl3_args.appendSlice(b.allocator, &.{ "zig", "run", "build_sdl3.zig", "--" });
-        try build_sdl3_args.append(b.allocator, switch (this.optimize) {
+        var build_sdl3_argv: std.ArrayList([]const u8) = .empty;
+        try build_sdl3_argv.appendSlice(b.allocator, &.{ "zig", "run", "build_sdl3.zig", "--" });
+        try build_sdl3_argv.append(b.allocator, switch (this.optimize) {
             .Debug => "-Doptimize=Debug",
             .ReleaseSafe => "-Doptimize=ReleaseSafe",
             .ReleaseFast => "-Doptimize=ReleaseFast",
             .ReleaseSmall => "-Doptimize=ReleaseSmall",
         });
-        const build_sdl3_cmd = b.addSystemCommand(build_sdl3_args.items);
+        const build_sdl3_cmd = b.addSystemCommand(build_sdl3_argv.items);
 
         // translate c
         this.sdl_c = b.addTranslateC(.{

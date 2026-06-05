@@ -6,16 +6,16 @@ pub const root_dir = "vendor/SDL/";
 pub const git_url = "https://github.com/libsdl-org/SDL.git";
 pub const git_tag = "release-3.4.8";
 
-pub fn getBuildDir(optimize: std.lang.OptimizeMode) [:0]const u8 {
+pub fn getBuildDir(optimize: std.lang.OptimizeMode) []const u8 {
     return switch (optimize) {
         .Debug => root_dir ++ "build/debug/",
         .ReleaseSafe => root_dir ++ "build/release_safe/",
         .ReleaseFast => root_dir ++ "build/release_fast/",
-        .ReleaseSmall => root_dir ++ "build/elease_small/",
+        .ReleaseSmall => root_dir ++ "build/release_small/",
     };
 }
 
-pub fn getLibPath(os_tag: std.Target.Os.Tag, optimize: std.lang.OptimizeMode) [:0]const u8 {
+pub fn getLibPath(os_tag: std.Target.Os.Tag, optimize: std.lang.OptimizeMode) []const u8 {
     return switch (os_tag) {
         .windows => switch (optimize) {
             .Debug => root_dir ++ "build/debug/SDL3.dll",
@@ -85,7 +85,7 @@ pub fn main(init: std.process.Init) !void {
             var cmake_conf_argv: std.ArrayList([]const u8) = .empty;
             try cmake_conf_argv.appendSlice(alloc, &.{ "cmake", "-S", root_dir, "-B", build_dir, "-G", "Ninja" });
             try cmake_conf_argv.appendSlice(alloc, &.{
-                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_TOOLCHAIN_FILE=", cwd, "/build_sdl3_toolchain.cmake" }),
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_TOOLCHAIN_FILE=", cwd, "/tools/zig_toolchain.cmake" }),
                 try std.mem.concat(alloc, u8, &.{ "-DTARGET=", target_triple }),
                 try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_NAME=", cmake.osTagToCmake(os_tag) }),
                 try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_PROCESSOR=", cmake.cpuArchToCmake(os_tag, cpu_arch) }),

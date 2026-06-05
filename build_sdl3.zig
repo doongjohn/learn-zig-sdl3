@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const cmake = @import("cmake_utils.zig");
 
 pub const root_dir = "vendor/SDL/";
 pub const git_url = "https://github.com/libsdl-org/SDL.git";
@@ -86,15 +87,8 @@ pub fn main(init: std.process.Init) !void {
             try cmake_conf_argv.appendSlice(alloc, &.{
                 try std.mem.concat(alloc, u8, &.{ "-DCMAKE_TOOLCHAIN_FILE=", cwd, "/build_sdl3_toolchain.cmake" }),
                 try std.mem.concat(alloc, u8, &.{ "-DTARGET=", target_triple }),
-                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_PROCESSOR=", @tagName(cpu_arch) }),
-                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_NAME=", switch (os_tag) {
-                    .linux => "Linux",
-                    .windows => "Windows",
-                    .macos => "Darwin",
-                    .freestanding => "Generic",
-                    .emscripten => "Emscripten",
-                    else => @panic("Unknown OS"),
-                } }),
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_NAME=", cmake.osTagToCmake(os_tag) }),
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_PROCESSOR=", cmake.cpuArchToCmake(os_tag, cpu_arch) }),
             });
             try cmake_conf_argv.append(alloc, switch (optimize) {
                 .Debug => "-DCMAKE_BUILD_TYPE=Debug",

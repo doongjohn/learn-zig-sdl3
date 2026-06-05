@@ -30,23 +30,30 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const alloc = init.arena.allocator();
 
-    const optimize: std.lang.OptimizeMode = blk: {
-        var args = try init.minimal.args.iterateAllocator(alloc);
-        while (args.next()) |arg| {
-            if (std.mem.startsWith(u8, arg, "-Doptimize=")) {
-                if (std.mem.eql(u8, arg, "-Doptimize=ReleaseSafe"))
-                    break :blk .ReleaseSafe;
-                if (std.mem.eql(u8, arg, "-Doptimize=ReleaseFast"))
-                    break :blk .ReleaseFast;
-                if (std.mem.eql(u8, arg, "-Doptimize=ReleaseSmall"))
-                    break :blk .ReleaseSmall;
-            }
+    var target_triple = try builtin.target.zigTriple(alloc);
+    var optimize: std.lang.OptimizeMode = .Debug;
+
+    var args = try init.minimal.args.iterateAllocator(alloc);
+    while (args.next()) |arg| {
+        if (std.mem.startsWith(u8, arg, "-Dtarget=")) {
+            target_triple = try alloc.dupe(u8, arg["-Dtarget=".len..]);
         }
-        break :blk .Debug;
-    };
+        if (std.mem.startsWith(u8, arg, "-Doptimize=")) {
+            if (std.mem.eql(u8, arg, "-Doptimize=ReleaseSafe"))
+                optimize = .ReleaseSafe;
+            if (std.mem.eql(u8, arg, "-Doptimize=ReleaseFast"))
+                optimize = .ReleaseFast;
+            if (std.mem.eql(u8, arg, "-Doptimize=ReleaseSmall"))
+                optimize = .ReleaseSmall;
+        }
+    }
 
     const build_dir = getBuildDir(optimize);
     const lib_path = getLibPath(optimize);
+
+    const target = try std.Target.Query.parse(.{ .arch_os_abi = target_triple });
+    const os_tag = target.os_tag orelse builtin.os.tag;
+    const cpu_arch = target.cpu_arch orelse builtin.cpu.arch;
 
     // Create vendor dir
     std.Io.Dir.cwd().createDirPath(io, "vendor") catch |err| switch (err) {
@@ -71,24 +78,38 @@ pub fn main(init: std.process.Init) !void {
     // Run cmake.
     std.Io.Dir.cwd().access(io, lib_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
+            const cwd = try std.process.currentPathAlloc(io, alloc);
+
             // cmake configure
             var cmake_conf_argv: std.ArrayList([]const u8) = .empty;
             try cmake_conf_argv.appendSlice(alloc, &.{ "cmake", "-S", root_dir, "-B", build_dir, "-G", "Ninja" });
+            try cmake_conf_argv.appendSlice(alloc, &.{
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_TOOLCHAIN_FILE=", cwd, "/build_sdl3_toolchain.cmake" }),
+                try std.mem.concat(alloc, u8, &.{ "-DTARGET=", target_triple }),
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_NAME=", switch (os_tag) {
+                    .linux => "Linux",
+                    .windows => "Windows",
+                    .macos => "Darwin",
+                    .freestanding => "Generic",
+                    .uefi => "UEFI",
+                    .wasi => "WASI",
+                    .emscripten => "Emscripten",
+                    else => @panic("Unknown OS"),
+                } }),
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_PROCESSOR=", @tagName(cpu_arch) }),
+            });
             try cmake_conf_argv.append(alloc, switch (optimize) {
                 .Debug => "-DCMAKE_BUILD_TYPE=Debug",
                 .ReleaseSafe => "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
                 .ReleaseFast => "-DCMAKE_BUILD_TYPE=Release",
                 .ReleaseSmall => "-DCMAKE_BUILD_TYPE=MinSizeRel",
             });
-
-            // TODO: use cmake toolchain file for cross compilation.
-            var cmake_conf_env = try std.process.Environ.createMap(init.minimal.environ, alloc);
-            if (cmake_conf_env.get("CC") == null) try cmake_conf_env.put("CC", "clang");
-            if (cmake_conf_env.get("CXX") == null) try cmake_conf_env.put("CXX", "clang++");
-
+            try cmake_conf_argv.appendSlice(alloc, &.{
+                "-DSDL_TESTS=OFF",
+                "-DSDL_TEST_LIBRARY=OFF",
+            });
             var cmake_conf = try std.process.spawn(io, .{
                 .argv = cmake_conf_argv.items,
-                .environ_map = &cmake_conf_env,
             });
             const cmake_conf_res = try cmake_conf.wait(io);
             if (!cmake_conf_res.success()) return error.CmakeConfFailed;
@@ -119,6 +140,10 @@ pub const LibSdl3 = struct {
             .ReleaseFast => "-Doptimize=ReleaseFast",
             .ReleaseSmall => "-Doptimize=ReleaseSmall",
         });
+        try build_sdl3_argv.append(
+            b.allocator,
+            try std.mem.concat(b.allocator, u8, &.{ "-Dtarget=", try target.result.zigTriple(b.allocator) }),
+        );
         const build_sdl3_cmd = b.addSystemCommand(build_sdl3_argv.items);
 
         // translate c

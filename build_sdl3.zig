@@ -92,8 +92,6 @@ pub fn main(init: std.process.Init) !void {
                     .windows => "Windows",
                     .macos => "Darwin",
                     .freestanding => "Generic",
-                    .uefi => "UEFI",
-                    .wasi => "WASI",
                     .emscripten => "Emscripten",
                     else => @panic("Unknown OS"),
                 } }),

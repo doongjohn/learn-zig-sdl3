@@ -86,6 +86,7 @@ pub fn main(init: std.process.Init) !void {
             try cmake_conf_argv.appendSlice(alloc, &.{
                 try std.mem.concat(alloc, u8, &.{ "-DCMAKE_TOOLCHAIN_FILE=", cwd, "/build_sdl3_toolchain.cmake" }),
                 try std.mem.concat(alloc, u8, &.{ "-DTARGET=", target_triple }),
+                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_PROCESSOR=", @tagName(cpu_arch) }),
                 try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_NAME=", switch (os_tag) {
                     .linux => "Linux",
                     .windows => "Windows",
@@ -96,7 +97,6 @@ pub fn main(init: std.process.Init) !void {
                     .emscripten => "Emscripten",
                     else => @panic("Unknown OS"),
                 } }),
-                try std.mem.concat(alloc, u8, &.{ "-DCMAKE_SYSTEM_PROCESSOR=", @tagName(cpu_arch) }),
             });
             try cmake_conf_argv.append(alloc, switch (optimize) {
                 .Debug => "-DCMAKE_BUILD_TYPE=Debug",

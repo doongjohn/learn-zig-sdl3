@@ -23,6 +23,7 @@ pub fn cpuArchToCmake(os_tag: std.Target.Os.Tag, cpu_arch: std.Target.Cpu.Arch) 
             .powerpc64le => "ppc64le",
             else => @tagName(cpu_arch),
         },
+        // https://ohanaware.com/blog/2020/08/macOS-CPU-Architecture.html
         .macos => switch (cpu_arch) {
             .x86 => "i386",
             .x86_64 => "x86_64",

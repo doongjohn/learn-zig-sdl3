@@ -14,8 +14,8 @@ pub fn getBuildDir(optimize: std.lang.OptimizeMode) [:0]const u8 {
     };
 }
 
-pub fn getLibPath(optimize: std.lang.OptimizeMode) [:0]const u8 {
-    return switch (builtin.os.tag) {
+pub fn getLibPath(os_tag: std.Target.Os.Tag, optimize: std.lang.OptimizeMode) [:0]const u8 {
+    return switch (os_tag) {
         .windows => switch (optimize) {
             .Debug => root_dir ++ "build/debug/SDL3.dll",
             .ReleaseSafe => root_dir ++ "build/release_safe/SDL3.dll",
@@ -48,12 +48,12 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    const build_dir = getBuildDir(optimize);
-    const lib_path = getLibPath(optimize);
-
     const target = try std.Target.Query.parse(.{ .arch_os_abi = target_triple });
     const os_tag = target.os_tag orelse builtin.os.tag;
     const cpu_arch = target.cpu_arch orelse builtin.cpu.arch;
+
+    const build_dir = getBuildDir(optimize);
+    const lib_path = getLibPath(os_tag, optimize);
 
     // Create vendor dir
     std.Io.Dir.cwd().createDirPath(io, "vendor") catch |err| switch (err) {
@@ -174,8 +174,9 @@ pub const LibSdl3 = struct {
     pub fn install(this: *const @This()) void {
         const b = this.b;
 
-        const lib_path = getLibPath(this.optimize);
-        switch (this.target.result.os.tag) {
+        const os_tag = this.target.result.os.tag;
+        const lib_path = getLibPath(os_tag, this.optimize);
+        switch (os_tag) {
             .windows => {
                 const lib_install = b.addInstallBinFile(b.path(lib_path), "SDL3.dll");
                 lib_install.step.dependOn(&this.c.step);

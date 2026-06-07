@@ -37,6 +37,6 @@ pub fn cpuArchToCmake(os_tag: std.Target.Os.Tag, cpu_arch: std.Target.Cpu.Arch) 
             .aarch64 => "ARM64",
             else => @panic("Unknown CPU arch for Windows"),
         },
-        else => @panic("Unsupported OS tag for CMake mapping"),
+        else => @panic("Unknown OS"),
     };
 }

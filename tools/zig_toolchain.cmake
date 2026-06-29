@@ -1,5 +1,5 @@
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
-    message(FATAL_ERROR "Visual Studio generator not supported, use: cmake -G Ninja")
+  message(FATAL_ERROR "Visual Studio generator not supported, use: cmake -G Ninja")
 endif()
 
 set(SCRIPT_DIR "${CMAKE_CURRENT_LIST_DIR}")

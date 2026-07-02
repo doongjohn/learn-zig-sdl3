@@ -213,23 +213,18 @@ const AppWindow = struct {
     }
 };
 
-var app_buf: [@sizeOf(App)]u8 align(@alignOf(App)) = undefined;
-var app_fba = std.heap.FixedBufferAllocator.init(&app_buf);
+var app_obj: App = .{};
 
 export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8) sdl.SDL_AppResult {
     _ = argc;
     _ = argv;
 
     if (appstate_ptr) |appstate| {
-        var app = app_fba.allocator().create(App) catch {
-            printError(@src(), "App alloaction failed", .{});
-            return sdl.SDL_APP_FAILURE;
-        };
-        app.init() catch {
+        app_obj.init() catch {
             printError(@src(), "App init failed", .{});
             return sdl.SDL_APP_FAILURE;
         };
-        appstate.* = app;
+        appstate.* = &app_obj;
         return sdl.SDL_APP_CONTINUE;
     } else {
         printError(@src(), "appstate_ptr is null", .{});

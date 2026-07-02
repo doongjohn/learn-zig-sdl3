@@ -213,7 +213,7 @@ const AppWindow = struct {
     }
 };
 
-var app_buf: [@alignOf(App) + @sizeOf(App)]u8 = undefined;
+var app_buf: [@sizeOf(App)]u8 align(@alignOf(App)) = undefined;
 var app_fba = std.heap.FixedBufferAllocator.init(&app_buf);
 
 export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8) sdl.SDL_AppResult {

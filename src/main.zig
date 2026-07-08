@@ -16,19 +16,20 @@ const use_debug_allocator = !is_wasm and switch (builtin.mode) {
 };
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-fn printError(src: std.lang.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+fn printWithLoc(src: std.lang.SourceLocation, comptime fmt: []const u8, args: anytype) void {
     std.log.err("'{s}:{d}:{d}' -> " ++ fmt, .{ src.file, src.line, src.column } ++ args);
 }
 
 fn sdlCall(src: std.lang.SourceLocation, result: bool) !void {
     if (!result) {
-        printError(src, "SDL error: {s}", .{sdl.SDL_GetError()});
+        printWithLoc(src, "SDL error: {s}", .{sdl.SDL_GetError()});
         return error.SdlError;
     }
 }
 
-const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
 const renderer_backend = "vulkan";
+
+const AppWindowTable = std.AutoHashMap(sdl.SDL_WindowID, AppWindow);
 
 const CreateWindowResult = struct {
     window: ?*sdl.SDL_Window = null,
@@ -54,7 +55,7 @@ const App = struct {
         self.app_window_table = AppWindowTable.init(self.allocator);
 
         if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
-            printError(@src(), "SDL_Init failed: {s}", .{sdl.SDL_GetError()});
+            printWithLoc(@src(), "SDL_Init failed: {s}", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
 
@@ -84,13 +85,13 @@ const App = struct {
 
         const window = sdl.SDL_CreateWindowWithProperties(props);
         if (window == null) {
-            printError(@src(), "SDL_CreateWindowWithProperties failed: {s}", .{sdl.SDL_GetError()});
+            printWithLoc(@src(), "SDL_CreateWindowWithProperties failed: {s}", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
 
         const renderer = sdl.SDL_CreateRenderer(window, renderer_backend);
         if (renderer == null) {
-            printError(@src(), "SDL_CreateRenderer failed: {s}", .{sdl.SDL_GetError()});
+            printWithLoc(@src(), "SDL_CreateRenderer failed: {s}", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
 
@@ -129,7 +130,7 @@ const App = struct {
             if (self.app_window_table.count() == 0) {
                 var quit_event = sdl.SDL_Event{ .type = sdl.SDL_EVENT_QUIT };
                 if (!sdl.SDL_PushEvent(&quit_event)) {
-                    printError(@src(), "SDL_PushEvent failed: {s}", .{sdl.SDL_GetError()});
+                    printWithLoc(@src(), "SDL_PushEvent failed: {s}", .{sdl.SDL_GetError()});
                 }
             }
             return error.InitError;
@@ -152,7 +153,7 @@ const AppWindow = struct {
 
     fn init(self: *@This()) !void {
         if (!sdl.SDL_SetWindowResizable(self.window, true)) {
-            printError(@src(), "SDL_SetWindowResizable failed: {s}\n", .{sdl.SDL_GetError()});
+            printWithLoc(@src(), "SDL_SetWindowResizable failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlError;
         }
 
@@ -221,13 +222,13 @@ export fn SDL_AppInit(appstate_ptr: ?*?*anyopaque, argc: c_int, argv: [*][*:0]u8
 
     if (appstate_ptr) |appstate| {
         app_obj.init() catch {
-            printError(@src(), "App init failed", .{});
+            printWithLoc(@src(), "App init failed", .{});
             return sdl.SDL_APP_FAILURE;
         };
         appstate.* = &app_obj;
         return sdl.SDL_APP_CONTINUE;
     } else {
-        printError(@src(), "appstate_ptr is null", .{});
+        printWithLoc(@src(), "appstate_ptr is null", .{});
         return sdl.SDL_APP_FAILURE;
     }
 }
@@ -249,13 +250,13 @@ export fn SDL_AppEvent(appstate: ?*anyopaque, event_ptr: ?*sdl.SDL_Event) sdl.SD
                 sdl.SDL_EVENT_KEY_DOWN => {
                     if (event.key.key == sdl.SDLK_SPACE) {
                         const result = App.createWindow("SDL3 with Zig", 600, 300) catch {
-                            printError(@src(), "createAppWindow failed\n", .{});
+                            printWithLoc(@src(), "createAppWindow failed\n", .{});
                             if (@errorReturnTrace()) |et| std.debug.dumpErrorReturnTrace(et);
                             return sdl.SDL_APP_FAILURE;
                         };
 
                         app.addAppWindow(result.window, result.renderer) catch {
-                            printError(@src(), "addAppWindow failed\n", .{});
+                            printWithLoc(@src(), "addAppWindow failed\n", .{});
                             if (@errorReturnTrace()) |et| std.debug.dumpErrorReturnTrace(et);
                             return sdl.SDL_APP_FAILURE;
                         };
@@ -279,7 +280,7 @@ export fn SDL_AppIterate(appstate: ?*anyopaque) sdl.SDL_AppResult {
         while (iterator.next()) |app_window| {
             app_window.update() catch |err| switch (err) {
                 error.SdlError => {
-                    printError(@src(), "Update failed for window: {d}.\n", .{app_window.window_id});
+                    printWithLoc(@src(), "Update failed for window: {d}.\n", .{app_window.window_id});
                     if (@errorReturnTrace()) |et| std.debug.dumpErrorReturnTrace(et);
                     return sdl.SDL_APP_FAILURE;
                 },

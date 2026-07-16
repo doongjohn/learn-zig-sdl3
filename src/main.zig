@@ -151,6 +151,11 @@ const AppWindow = struct {
     mouse_x: f32 = 0,
     mouse_y: f32 = 0,
 
+    last_counter: u64 = 0,
+    fps_timer: f32 = 0,
+    frame_count: u32 = 0,
+    fps: f32 = 0,
+
     fn init(self: *@This()) !void {
         if (!sdl.SDL_SetWindowResizable(self.window, true)) {
             printWithLoc(@src(), "SDL_SetWindowResizable failed: {s}\n", .{sdl.SDL_GetError()});
@@ -170,7 +175,63 @@ const AppWindow = struct {
         sdl.SDL_DestroyWindow(self.window);
     }
 
+    inline fn ndcToScreen(x: f32, y: f32, w: f32, h: f32) sdl.SDL_FPoint {
+        return .{
+            .x = (x + 1.0) * w * 0.5,
+            .y = (1.0 - y) * h * 0.5,
+        };
+    }
+
+    fn drawTriangle(self: *@This()) !void {
+        var width: c_int = 0;
+        var height: c_int = 0;
+        try sdlCall(@src(), sdl.SDL_GetCurrentRenderOutputSize(self.renderer, &width, &height));
+
+        const w: f32 = @floatFromInt(width);
+        const h: f32 = @floatFromInt(height);
+
+        const vertices = [_]sdl.SDL_Vertex{
+            .{
+                .position = ndcToScreen(0.0, 0.5, w, h),
+                .color = .{ .r = 1, .g = 0, .b = 0, .a = 1 },
+                .tex_coord = .{ .x = 0, .y = 0 },
+            },
+            .{
+                .position = ndcToScreen(-0.5, -0.5, w, h),
+                .color = .{ .r = 0, .g = 1, .b = 0, .a = 1 },
+                .tex_coord = .{ .x = 0, .y = 0 },
+            },
+            .{
+                .position = ndcToScreen(0.5, -0.5, w, h),
+                .color = .{ .r = 0, .g = 0, .b = 1, .a = 1 },
+                .tex_coord = .{ .x = 0, .y = 0 },
+            },
+        };
+
+        try sdlCall(@src(), sdl.SDL_RenderGeometry(self.renderer, null, &vertices, vertices.len, null, 0));
+    }
+
     fn update(self: *@This()) !void {
+        // Calculate delta time.
+        const cur_counter = sdl.SDL_GetPerformanceCounter();
+        const freq = sdl.SDL_GetPerformanceFrequency();
+        var delta: f32 = 0;
+        if (self.last_counter != 0) {
+            delta =
+                @as(f32, @floatFromInt(cur_counter - self.last_counter)) /
+                @as(f32, @floatFromInt(freq));
+        }
+        self.last_counter = cur_counter;
+
+        // Calculate FPS.
+        self.fps_timer += delta;
+        self.frame_count += 1;
+        if (self.fps_timer >= 1.0) {
+            self.fps = @as(f32, @floatFromInt(self.frame_count)) / @as(f32, @floatCast(self.fps_timer));
+            self.frame_count = 0;
+            self.fps_timer = 0;
+        }
+
         // Clear color.
         const now: f64 = @as(f64, @floatFromInt(sdl.SDL_GetTicks())) / 1000.0;
         const red: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now));
@@ -178,6 +239,9 @@ const AppWindow = struct {
         const blue: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 4 / 3));
         try sdlCall(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, red, green, blue, 1));
         try sdlCall(@src(), sdl.SDL_RenderClear(self.renderer));
+
+        try sdlCall(@src(), sdl.SDL_SetRenderScale(self.renderer, 1, 1));
+        try self.drawTriangle();
 
         // Draw rect.
         const rect = sdl.SDL_FRect{
@@ -189,11 +253,16 @@ const AppWindow = struct {
         try sdlCall(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, 1));
         try sdlCall(@src(), sdl.SDL_RenderFillRect(self.renderer, &rect));
 
-        // Draw text.
         try sdlCall(@src(), sdl.SDL_SetRenderDrawColorFloat(self.renderer, 1, 1, 1, 1));
         try sdlCall(@src(), sdl.SDL_SetRenderScale(self.renderer, 2, 2));
-        try sdlCall(@src(), sdl.SDL_RenderDebugText(self.renderer, 5, 5, "Press Space to create a new window."));
-        try sdlCall(@src(), sdl.SDL_SetRenderScale(self.renderer, 1, 1));
+
+        // Draw FPS.
+        var fps_text_buf: [64]u8 = @splat(0);
+        const fps_text = std.fmt.bufPrint(&fps_text_buf, "FPS: {d:.1}", .{self.fps}) catch "";
+        try sdlCall(@src(), sdl.SDL_RenderDebugText(self.renderer, 5, 5, fps_text.ptr));
+
+        // Draw text.
+        try sdlCall(@src(), sdl.SDL_RenderDebugText(self.renderer, 5, 20, "Press Space to create a new window."));
 
         // Update the screen.
         try sdlCall(@src(), sdl.SDL_RenderPresent(self.renderer));
